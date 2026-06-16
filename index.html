@@ -4,220 +4,277 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>VLDB'27 — Constrained Path Traversal · Experiment Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <style>
   :root{--bg:#0f1419;--panel:#1a212b;--panel2:#141a22;--ink:#e6edf3;--mut:#8b97a7;--line:#2b3949;
-        --native:#ff6b6b;--ean:#4dabf7;--leveled:#51cf66;--accent:#ffd43b;--ok:#51cf66;--todo:#ffa94d;}
+        --native:#ff6b6b;--ean:#4dabf7;--leveled:#51cf66;--accent:#ffd43b;--ok:#51cf66;--todo:#ffa94d;
+        --sidebar:#11161d;}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
-       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  header{padding:26px 32px 16px;border-bottom:1px solid var(--line)}
-  h1{margin:0 0 6px;font-size:22px}
-  .sub{color:var(--mut);max-width:960px}
-  .wrap{padding:20px 32px 70px;max-width:1200px;margin:0 auto}
-  h2.sec{font-size:18px;margin:34px 0 6px;border-left:3px solid var(--ean);padding-left:10px}
-  .controls{display:flex;gap:14px;align-items:center;margin:16px 0 6px;flex-wrap:wrap}
-  .controls label{color:var(--mut);font-size:13px;margin-right:4px}
-  select,.toggle{background:var(--panel);color:var(--ink);border:1px solid var(--line);
-         border-radius:8px;padding:7px 12px;font-size:14px}
-  .toggle button{background:none;border:0;color:var(--mut);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:13px}
+       font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.6;
+       letter-spacing:.005em;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.brand,.nav a{font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.01em}
+  .app{display:flex;min-height:100vh}
+  /* sidebar */
+  .sidebar{width:248px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);
+           position:sticky;top:0;height:100vh;padding:24px 16px;display:flex;flex-direction:column}
+  .brand{font-size:17px;font-weight:700;padding:0 10px 4px}
+  .brand span{color:var(--ean)}
+  .brand .tag{display:block;font-family:'Inter';font-weight:400;font-size:11.5px;color:var(--mut);letter-spacing:0;margin-top:2px}
+  .nav{margin-top:22px;display:flex;flex-direction:column;gap:3px}
+  .nav .grouplabel{font-family:'Inter';font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:#5d6b7c;padding:14px 10px 4px}
+  .nav a{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;color:var(--mut);
+         text-decoration:none;font-size:14px;font-weight:500;cursor:pointer;transition:.12s}
+  .nav a:hover{background:#1a2230;color:var(--ink)}
+  .nav a.active{background:linear-gradient(90deg,rgba(77,171,247,.18),rgba(77,171,247,.04));color:#fff}
+  .nav a.active::before{content:'';width:3px;height:18px;background:var(--ean);border-radius:3px;margin-left:-12px;margin-right:6px}
+  .nav .ico{width:7px;height:7px;border-radius:50%;background:#3a4655}
+  .nav a.active .ico{background:var(--ean)}
+  .side-foot{margin-top:auto;font-size:11.5px;color:#566273;padding:10px}
+  .side-foot a{color:#6b7a8c}
+  /* main */
+  main{flex:1;min-width:0}
+  .topbar{padding:22px 36px 18px;border-bottom:1px solid var(--line)}
+  .topbar h1{margin:0 0 6px;font-size:21px;font-weight:600}
+  .topbar .sub{color:var(--mut);max-width:1000px;font-size:14px}
+  .content{padding:26px 36px 70px;max-width:1180px}
+  .view{display:none}.view.show{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h2.sec{font-size:19px;font-weight:600;margin:2px 0 4px}
+  .seclead{color:var(--mut);margin:0 0 16px;font-size:14px;max-width:860px}
+  .controls{display:flex;gap:16px;align-items:center;margin:14px 0 4px;flex-wrap:wrap}
+  .controls label{color:var(--mut);font-size:12.5px;margin-right:5px;text-transform:uppercase;letter-spacing:.05em}
+  select,.toggle{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:9px;
+         padding:8px 12px;font-size:14px;font-family:'Inter'}
+  .toggle{padding:3px;display:inline-flex}
+  .toggle button{background:none;border:0;color:var(--mut);cursor:pointer;padding:5px 12px;border-radius:7px;font-size:13px;font-family:'Inter';position:relative}
   .toggle button.on{background:var(--ean);color:#06121f;font-weight:600}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 14px 8px;margin:16px 0;position:relative}
-  .card h3{margin:4px 6px 2px;font-size:16px}
-  .card p{margin:0 6px 10px;color:var(--mut);font-size:13px}
+  /* tooltip */
+  .tip:hover::after{content:attr(data-tip);position:absolute;bottom:140%;left:50%;transform:translateX(-50%);
+    background:#0b0f14;border:1px solid var(--line);color:var(--ink);padding:9px 11px;border-radius:9px;
+    width:230px;font-size:12px;font-weight:400;line-height:1.45;z-index:20;box-shadow:0 8px 26px rgba(0,0,0,.5)}
+  .tip:hover::before{content:'';position:absolute;bottom:140%;left:50%;transform:translate(-50%,9px);
+    border:6px solid transparent;border-top-color:var(--line);z-index:20}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 16px 9px;margin:16px 0}
+  .card h3{margin:4px 6px 2px;font-size:16px;font-weight:600}
+  .card p{margin:0 6px 12px;color:var(--mut);font-size:13px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
-  .plot{width:100%;height:410px}
-  .todo{display:flex;align-items:center;justify-content:center;height:410px;color:var(--todo);
-        font-size:15px;text-align:center;border:1px dashed var(--line);border-radius:10px;background:var(--panel2)}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}.sidebar{width:64px;padding:18px 8px}.brand .tag,.nav a span.lbl,.nav .grouplabel,.side-foot{display:none}.nav a{justify-content:center}}
+  .plot{width:100%;height:420px}
+  .todo{display:flex;align-items:center;justify-content:center;height:420px;color:var(--todo);font-size:15px;
+        text-align:center;border:1px dashed var(--line);border-radius:12px;background:var(--panel2)}
   .legend-note{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:13px}
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
-  table{border-collapse:collapse;width:100%;font-size:13.5px}
-  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left}
-  th{background:var(--panel2);color:var(--mut)}
-  .pill{padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left}
+  tr:last-child td{border-bottom:0}
+  th{background:var(--panel2);color:var(--mut);font-weight:600}
+  .pill{padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600}
   .pill.done{background:rgba(81,207,102,.15);color:var(--ok)}
   .pill.todo{background:rgba(255,169,77,.15);color:var(--todo)}
   .qcards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   @media(max-width:900px){.qcards{grid-template-columns:1fr}}
-  .q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .q b{color:var(--ean)}
+  .q{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .q b{color:var(--ean);font-family:'Space Grotesk'}
   code{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#cdd6e0}
-  a{color:var(--ean)} ul{margin:6px 0 6px 18px;padding:0} li{margin:3px 0}
-  footer{color:var(--mut);font-size:12.5px;padding:18px 32px 40px;border-top:1px solid var(--line);max-width:1200px;margin:24px auto 0}
+  a{color:var(--ean)} ul{margin:6px 0 6px 18px;padding:0} li{margin:4px 0}
 </style>
 </head>
 <body>
-<header>
-  <h1>Constrained Path Traversal in GQL — Experiment Dashboard</h1>
-  <div class="sub">VLDB&nbsp;'27. The query <em>“is there a path of length k where edge amounts strictly
-  increase”</em> (Q_mono) under three representations:
-  <b style="color:var(--native)">Native</b> (generate-then-filter / RA),
-  <b style="color:var(--ean)">EAN</b> (edge→node, query-independent),
-  <b style="color:var(--leveled)">Leveled</b> (stages graph). Speedup = Latency<sub>native</sub> / (Build + Query).
-  10 cold runs/query; trimmed mean (median also kept); 60&nbsp;s timeout.</div>
-</header>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">VLDB&nbsp;<span>'27</span><span class="tag">Constrained Path Traversal in GQL</span></div>
+    <nav class="nav" id="nav">
+      <div class="grouplabel">Experiments</div>
+      <a data-view="e1" class="active"><span class="ico"></span><span class="lbl">E1 · Synthetic</span></a>
+      <a data-view="e2"><span class="ico"></span><span class="lbl">E2 · Real-world</span></a>
+      <a data-view="coverage"><span class="ico"></span><span class="lbl">Coverage</span></a>
+      <div class="grouplabel">Plan</div>
+      <a data-view="questions"><span class="ico"></span><span class="lbl">Research questions</span></a>
+      <a data-view="settings"><span class="ico"></span><span class="lbl">Settings</span></a>
+      <a data-view="reviewers"><span class="ico"></span><span class="lbl">Reviewer comments</span></a>
+    </nav>
+    <div class="side-foot">data · <a href="https://github.com/hadarrot/vldb27-experiments/tree/main/results">results CSVs</a><br>auto-synced from GitHub</div>
+  </aside>
 
-<div class="wrap">
-
-  <!-- ============ E1 RESULTS ============ -->
-  <h2 class="sec">E1 — Synthetic (gMark): break-even &amp; EAN vs Leveled</h2>
-  <div class="controls">
-    <span><label>Engine</label><select id="eng"></select></span>
-    <span><label>Density</label><select id="den"></select></span>
-    <span><label>Graph size N</label><select id="nsel"></select></span>
-    <span><label>Query stat</label>
-      <span class="toggle" id="metric">
-        <button data-m="qmean" class="on">trimmed mean</button>
-        <button data-m="qmedian">median</button>
-      </span>
-    </span>
-    <span class="legend-note" style="margin-left:auto">
-      <span><span class="dot" style="background:var(--native)"></span>Native</span>
-      <span><span class="dot" style="background:var(--ean)"></span>EAN</span>
-      <span><span class="dot" style="background:var(--leveled)"></span>Leveled</span>
-    </span>
-  </div>
-
-  <div class="card">
-    <h3>Query time vs path length <span id="ctx" style="color:var(--mut);font-weight:400;font-size:13px"></span></h3>
-    <p>Native explodes with k and times out (line ends); the transforms stay flat across all k, even unbounded.</p>
-    <div id="qplot" class="plot"></div>
-  </div>
-
-  <div class="grid">
-    <div class="card">
-      <h3>Speedup vs Native (build + query)</h3>
-      <p>&gt;1 = transform wins (incl. build). Dashed line = break-even (=1); shaded band = Native timed out (∞).</p>
-      <div id="splot" class="plot"></div>
+  <main>
+    <div class="topbar">
+      <h1 id="topTitle">E1 — Synthetic (gMark): break-even &amp; EAN vs Leveled</h1>
+      <div class="sub">Query <em>“is there a path of length k where edge amounts strictly increase”</em> (Q_mono) under
+      <b style="color:var(--native)">Native</b> (generate-then-filter / RA),
+      <b style="color:var(--ean)">EAN</b> (edge→node), <b style="color:var(--leveled)">Leveled</b> (stages graph).
+      Speedup = Latency<sub>native</sub> / (Build + Query). 10 cold runs/query; 60&nbsp;s timeout.</div>
     </div>
-    <div class="card">
-      <h3>Build time vs graph size</h3>
-      <p>One-time transform build (Native = loading the input graph).</p>
-      <div id="bplot" class="plot"></div>
+
+    <div class="content">
+
+      <!-- E1 -->
+      <section class="view show" id="view-e1">
+        <div class="controls">
+          <span><label>Engine</label><select id="eng"></select></span>
+          <span><label>Density</label><select id="den"></select></span>
+          <span><label>Graph N</label><select id="nsel"></select></span>
+          <span><label>Query stat</label>
+            <span class="toggle" id="metric">
+              <button class="tip on" data-m="qmean" data-tip="Trimmed mean: average of the 10 runs after dropping the single fastest and single slowest — robust to one-off spikes.">trimmed mean</button>
+              <button class="tip" data-m="qmedian" data-tip="Median: the middle value of the 10 sorted run times — naturally ignores outliers.">median</button>
+            </span>
+          </span>
+          <span class="legend-note" style="margin-left:auto">
+            <span><span class="dot" style="background:var(--native)"></span>Native</span>
+            <span><span class="dot" style="background:var(--ean)"></span>EAN</span>
+            <span><span class="dot" style="background:var(--leveled)"></span>Leveled</span>
+          </span>
+        </div>
+        <div class="card">
+          <h3>Query time vs path length <span id="ctx" style="color:var(--mut);font-weight:400;font-size:13px"></span></h3>
+          <p>Native explodes with k and times out (line ends); the transforms stay flat across all k — even unbounded.</p>
+          <div id="qplot" class="plot"></div>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h3>Speedup vs Native (build + query)</h3>
+            <p>&gt;1 = transform wins (incl. build). Dashed line = break-even (=1); shaded band = Native timed out (∞).</p>
+            <div id="splot" class="plot"></div>
+          </div>
+          <div class="card">
+            <h3>Build time vs graph size</h3>
+            <p>One-time transform build (Native = loading the input graph).</p>
+            <div id="bplot" class="plot"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- E2 -->
+      <section class="view" id="view-e2">
+        <h2 class="sec">E2 — Real-world data (Bitcoin)</h2>
+        <p class="seclead">Do the synthetic findings hold on real messy topologies? Same 3 approaches, Q_mono, k = 2…1024 + unbounded.</p>
+        <div class="card"><div id="btc" class="todo"></div></div>
+      </section>
+
+      <!-- Coverage -->
+      <section class="view" id="view-coverage">
+        <h2 class="sec">Coverage — what's run vs TODO</h2>
+        <p class="seclead">Each (engine × density) cell of E1, plus the real-world experiment.</p>
+        <div class="card"><div id="cov"></div></div>
+      </section>
+
+      <!-- Questions -->
+      <section class="view" id="view-questions">
+        <h2 class="sec">Research questions</h2>
+        <p class="seclead">What the experiments are meant to answer.</p>
+        <div class="qcards">
+          <div class="q"><b>#1 Pattern level vs RA — break-even</b><br>Does a graph transformation beat native
+            generate-then-filter, and at what k does (build+query) win? How do N and density move that point?</div>
+          <div class="q"><b>#2 EAN vs Leveled</b><br>Which transformation wins and when, separating build cost from
+            query cost — across the full range.</div>
+          <div class="q"><b>#3 Real-world data</b><br>Do the synthetic findings hold on Bitcoin Alpha + OTC?</div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="view" id="view-settings">
+        <h2 class="sec">Settings</h2>
+        <p class="seclead">The fixed experimental setup.</p>
+        <table>
+          <tr><th>Approaches</th><td>Native (generate-then-filter), EAN (edge→node, query-independent), Leveled (stages graph, query-specific)</td></tr>
+          <tr><th>Engines</th><td>Neo4j + Kuzu <span class="pill todo">Kuzu: planned</span></td></tr>
+          <tr><th>Query type</th><td>Q_mono = strictly increasing (&lt;)</td></tr>
+          <tr><th>Metric</th><td>Speedup = Latency_native / (Build + Query); build &amp; query also reported separately</td></tr>
+          <tr><th>Timeout</th><td>60s per build stage and per query</td></tr>
+          <tr><th>Runs</th><td>10 runs; drop fastest + slowest (1 each); trimmed mean; median also kept; cache cleared (cold)</td></tr>
+          <tr><th>Correctness</th><td>Validate vs ground-truth DP oracle + all 3 approaches must agree (representative configs)</td></tr>
+          <tr><th>Skip logic</th><td>Once 2 consecutive bounded k both time out, skip remaining bounded k; unbounded always measured</td></tr>
+        </table>
+      </section>
+
+      <!-- Reviewers -->
+      <section class="view" id="view-reviewers">
+        <h2 class="sec">Reviewer comments (VLDB'26)</h2>
+        <p class="seclead">How the prior reviews are addressed.</p>
+        <div class="grid">
+          <div class="card"><h3 style="color:var(--ok)">Will apply</h3><ul>
+            <li>Add EAN (query-independent edge→node transform) as a method</li>
+            <li>Report build time and query time separately, not just summed</li>
+            <li>More runs with outlier trimming (10 runs, drop fastest+slowest, trimmed mean)</li></ul></div>
+          <div class="card"><h3 style="color:var(--todo)">Will not apply</h3><ul>
+            <li>Dedicated workload experiment — query diversity already represents a workload</li>
+            <li>120 runs per query — impractical for 60s-timeout queries (we trim instead)</li>
+            <li>More real-world domains beyond Bitcoin — keep Alpha + OTC for now</li></ul></div>
+        </div>
+      </section>
+
     </div>
-  </div>
-
-  <!-- ============ COVERAGE ============ -->
-  <h2 class="sec">Coverage — what's run vs TODO</h2>
-  <div class="card"><div id="cov"></div></div>
-
-  <!-- ============ REAL DATA (E2) ============ -->
-  <h2 class="sec">E2 — Real-world data (Bitcoin)</h2>
-  <div class="card">
-    <p>Do the synthetic findings hold on real messy topologies? Same 3 approaches, Q_mono, k=2…1024+unbounded.</p>
-    <div id="btc" class="todo"></div>
-  </div>
-
-  <!-- ============ PLAN ============ -->
-  <h2 class="sec">Research questions</h2>
-  <div class="qcards">
-    <div class="q"><b>#1 Pattern level vs RA — break-even</b><br>Does a graph transformation beat native
-      generate-then-filter, and at what k does (build+query) win? How do N and density move that point?</div>
-    <div class="q"><b>#2 EAN vs Leveled</b><br>Which transformation wins and when, separating build cost from
-      query cost — across the full range.</div>
-    <div class="q"><b>#3 Real-world data</b><br>Do the synthetic findings hold on Bitcoin Alpha + OTC?</div>
-  </div>
-
-  <h2 class="sec">Settings</h2>
-  <table>
-    <tr><th>Approaches</th><td>Native (generate-then-filter), EAN (edge→node, query-independent), Leveled (stages graph, query-specific)</td></tr>
-    <tr><th>Engines</th><td>Neo4j + Kuzu <span class="pill todo">Kuzu: planned</span></td></tr>
-    <tr><th>Query type</th><td>Q_mono = strictly increasing (&lt;)</td></tr>
-    <tr><th>Metric</th><td>Speedup = Latency_native / (Build + Query); build &amp; query also reported separately</td></tr>
-    <tr><th>Timeout</th><td>60s per build stage and per query</td></tr>
-    <tr><th>Runs</th><td>10 runs; drop fastest + slowest (1 each); trimmed mean; median also kept; cache cleared (cold)</td></tr>
-    <tr><th>Correctness</th><td>Validate vs ground-truth DP oracle + all 3 approaches must agree (representative configs)</td></tr>
-    <tr><th>Skip logic</th><td>Once 2 consecutive bounded k both time out, skip remaining bounded k; unbounded always measured</td></tr>
-  </table>
-
-  <h2 class="sec">Reviewer comments</h2>
-  <div class="grid">
-    <div class="card"><h3 style="color:var(--ok)">Will apply</h3><ul>
-      <li>Add EAN (query-independent edge→node transform) as a method</li>
-      <li>Report build time and query time separately, not just summed</li>
-      <li>More runs with outlier trimming (10 runs, drop fastest+slowest, trimmed mean)</li></ul></div>
-    <div class="card"><h3 style="color:var(--todo)">Will not apply</h3><ul>
-      <li>Dedicated workload experiment — query diversity already represents a workload</li>
-      <li>120 runs per query — impractical for 60s-timeout queries (we trim instead)</li>
-      <li>More real-world domains beyond Bitcoin — keep Alpha + OTC for now</li></ul></div>
-  </div>
+  </main>
 </div>
 
-<footer>
-  Data auto-generated from <a href="https://github.com/hadarrot/vldb27-experiments/tree/main/results">vldb27-experiments/results</a>
-  (a workflow regenerates <code>data.js</code> on every results change). ∞ = Native timed out while the transform
-  succeeded. Times are trimmed means / medians of 10 cold runs.
-</footer>
-
 <script>
+const TITLES={e1:"E1 — Synthetic (gMark): break-even & EAN vs Leveled",
+  e2:"E2 — Real-world data (Bitcoin)",coverage:"Coverage",questions:"Research questions",
+  settings:"Settings",reviewers:"Reviewer comments"};
 function initDashboard(){
 const C={native:'#ff6b6b',EAN:'#4dabf7',leveled:'#51cf66'};
 const KS=DATA.ks, xs=KS.map((_,i)=>i);
 let metric='qmean';
-const base={paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3'},
+const base={paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},
   margin:{l:62,r:18,t:8,b:46},legend:{orientation:'h',y:1.13},hovermode:'x unified',
   xaxis:{tickvals:xs,ticktext:KS,title:'path length k',gridcolor:'#2b3949'}};
-
-function key(){return document.getElementById('eng').value+'|'+document.getElementById('den').value;}
-function showTodo(id,msg){document.getElementById(id).outerHTML='';} // not used
-function setTodo(id){const el=document.getElementById(id);el.className='todo';el.innerHTML='⏳ No data yet — TODO';el.style.height='410px';}
+const key=()=>document.getElementById('eng').value+'|'+document.getElementById('den').value;
+function setTodo(id){const e=document.getElementById(id);e.className='todo';e.innerHTML='⏳ No data yet — TODO';e.style.height='420px';}
 
 function draw(){
-  const run=DATA.runs[key()];
-  const n=document.getElementById('nsel').value;
+  const run=DATA.runs[key()], n=document.getElementById('nsel').value;
   document.getElementById('ctx').textContent='· '+document.getElementById('eng').value+' · density '+document.getElementById('den').value+' · N='+Number(n).toLocaleString()+' · '+(metric==='qmean'?'trimmed mean':'median');
   ['qplot','splot','bplot'].forEach(id=>{const e=document.getElementById(id);e.className='plot';e.innerHTML='';});
   if(!run){['qplot','splot','bplot'].forEach(setTodo);return;}
-
   const q=run[metric][n];
-  Plotly.react('qplot',['native','EAN','leveled'].map(a=>({x:xs,y:q[a],mode:'lines+markers',name:a,
-     connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}})),
-     Object.assign({},base,{yaxis:{title:'query time (ms, log)',type:'log',gridcolor:'#2b3949'}}),
-     {displayModeBar:false,responsive:true});
-
+  Plotly.react('qplot',['native','EAN','leveled'].map(a=>({x:xs,y:q[a],mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}})),
+    Object.assign({},base,{yaxis:{title:'query time (ms, log)',type:'log',gridcolor:'#2b3949'}}),{displayModeBar:false,responsive:true});
   const s=run.speedup[n], tk=run.nat_to_k[n];
-  const shapes=[{type:'line',x0:-0.4,x1:KS.length-0.6,y0:1,y1:1,line:{color:'#ffd43b',width:1.4,dash:'dash'}}];
-  const ann=[];
-  if(tk!==null && tk!==undefined){const i=KS.indexOf(tk);
+  const shapes=[{type:'line',x0:-0.4,x1:KS.length-0.6,y0:1,y1:1,line:{color:'#ffd43b',width:1.4,dash:'dash'}}], ann=[];
+  if(tk!==null&&tk!==undefined){const i=KS.indexOf(tk);
     shapes.push({type:'rect',x0:i-0.5,x1:KS.length-0.5,y0:0,y1:1,yref:'paper',fillcolor:'rgba(255,107,107,0.10)',line:{width:0}});
     ann.push({x:i+(KS.length-1-i)/2,y:0.93,yref:'paper',text:'native T.O. → ∞',showarrow:false,font:{color:'#ff6b6b',size:11}});}
-  Plotly.react('splot',['EAN','leveled'].map(a=>({x:xs,y:s[a],mode:'lines+markers',name:a,
-     connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}})),
-     Object.assign({},base,{shapes:shapes,annotations:ann,yaxis:{title:'speedup (×, log)',type:'log',gridcolor:'#2b3949'}}),
-     {displayModeBar:false,responsive:true});
-
+  Plotly.react('splot',['EAN','leveled'].map(a=>({x:xs,y:s[a],mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}})),
+    Object.assign({},base,{shapes:shapes,annotations:ann,yaxis:{title:'speedup (×, log)',type:'log',gridcolor:'#2b3949'}}),{displayModeBar:false,responsive:true});
   Plotly.react('bplot',['native','EAN','leveled'].map(a=>({x:DATA.ns.map(String),y:run.build[a],type:'bar',name:a,marker:{color:C[a]}})),
-     {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3'},margin:{l:64,r:18,t:8,b:46},
-      barmode:'group',legend:{orientation:'h',y:1.13},xaxis:{title:'N (nodes)',gridcolor:'#2b3949'},
-      yaxis:{title:'build time (ms, log)',type:'log',gridcolor:'#2b3949'}},{displayModeBar:false,responsive:true});
+    {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:64,r:18,t:8,b:46},
+     barmode:'group',legend:{orientation:'h',y:1.13},xaxis:{title:'N (nodes)',gridcolor:'#2b3949'},
+     yaxis:{title:'build time (ms, log)',type:'log',gridcolor:'#2b3949'}},{displayModeBar:false,responsive:true});
 }
-
 function coverage(){
   let h='<table><tr><th>engine \\ density</th>'+DATA.densities.map(d=>'<th>D='+d+'</th>').join('')+'</tr>';
-  DATA.engines.forEach(e=>{h+='<tr><th>'+e+'</th>';DATA.densities.forEach(d=>{
-    const ok=DATA.available.includes(e+'|'+d);
+  DATA.engines.forEach(e=>{h+='<tr><th>'+e+'</th>';DATA.densities.forEach(d=>{const ok=DATA.available.includes(e+'|'+d);
     h+='<td><span class="pill '+(ok?'done':'todo')+'">'+(ok?'done':'TODO')+'</span></td>';});h+='</tr>';});
-  h+='</table><p style="margin-top:10px">E2 real-world (Bitcoin Alpha + OTC): <span class="pill todo">TODO</span></p>';
+  h+='</table><p style="margin-top:12px;color:var(--mut)">E2 real-world (Bitcoin Alpha + OTC): <span class="pill todo">TODO</span></p>';
   document.getElementById('cov').innerHTML=h;
 }
 
-// populate controls
 const eng=document.getElementById('eng'),den=document.getElementById('den'),nsel=document.getElementById('nsel');
 DATA.engines.forEach(e=>eng.add(new Option(e,e)));
 DATA.densities.forEach(d=>den.add(new Option('D='+d,d)));
 DATA.ns.forEach(n=>nsel.add(new Option(n.toLocaleString(),n)));
 nsel.value=100000;
 [eng,den,nsel].forEach(s=>s.onchange=draw);
-document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{
-  metric=b.dataset.m;document.querySelectorAll('#metric button').forEach(x=>x.classList.toggle('on',x===b));draw();});
+document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{metric=b.dataset.m;
+  document.querySelectorAll('#metric button').forEach(x=>x.classList.toggle('on',x===b));draw();});
 document.getElementById('btc').innerHTML='⏳ TODO — '+DATA.bitcoin.datasets.join(' &nbsp;·&nbsp; ');
 coverage(); draw();
+
+// sidebar view switching
+document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('#nav a').forEach(x=>x.classList.remove('active'));
+  a.classList.add('active');
+  const v=a.dataset.view;
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('show',s.id==='view-'+v));
+  document.getElementById('topTitle').textContent=TITLES[v];
+  if(v==='e1'){['qplot','splot','bplot'].forEach(id=>{try{Plotly.Plots.resize(id);}catch(e){}});}
+});
 }
-// load data.js cache-busted so the browser never shows a stale copy (incl. after auto-updates)
-var _s=document.createElement('script');
-_s.src='data.js?t='+Date.now();
-_s.onload=initDashboard;
+var _s=document.createElement('script');_s.src='data.js?t='+Date.now();_s.onload=initDashboard;
 _s.onerror=function(){document.getElementById('qplot').innerHTML='<div class="todo">Failed to load data.js</div>';};
 document.head.appendChild(_s);
 </script>
