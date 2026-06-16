@@ -249,7 +249,7 @@ function drawScaling(run){
     {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:62,r:18,t:8,b:46},
      legend:{orientation:'h',y:1.13},hovermode:'x unified',dragmode:false,
      xaxis:{title:'N (nodes)',type:'category',gridcolor:'#2b3949',fixedrange:true},
-     yaxis:{title:'query time (ms, log)',type:'log',gridcolor:'#2b3949',fixedrange:true}},CFG);
+     yaxis:{title:'query time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true}},CFG);
 }
 function drawReach(run){
   Plotly.react('rplot',['native','EAN','leveled'].map(a=>({x:Nlabels,
@@ -267,20 +267,20 @@ function draw(){
   drawScaling(run); drawReach(run);
   const q=run[metric][n];
   Plotly.react('qplot',['native','EAN','leveled'].map(a=>({x:xs,y:q[a],mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}})),
-    Object.assign({},base,{yaxis:{title:'query time (ms, log)',type:'log',gridcolor:'#2b3949',fixedrange:true}}),CFG);
+    Object.assign({},base,{yaxis:{title:'query time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true}}),CFG);
   const s=run.speedup[n], tk=run.nat_to_k[n];
   const shapes=[{type:'line',x0:-0.4,x1:KS.length-0.6,y0:1,y1:1,line:{color:'#ffd43b',width:1.4,dash:'dash'}}], ann=[];
   if(tk!==null&&tk!==undefined){const i=KS.indexOf(tk);
     shapes.push({type:'rect',x0:i-0.5,x1:KS.length-0.5,y0:0,y1:1,yref:'paper',fillcolor:'rgba(255,107,107,0.10)',line:{width:0}});
     ann.push({x:i+(KS.length-1-i)/2,y:0.93,yref:'paper',text:'native T.O. → ∞',showarrow:false,font:{color:'#ff6b6b',size:11}});}
   Plotly.react('splot',['EAN','leveled'].map(a=>({x:xs,y:s[a],mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}})),
-    Object.assign({},base,{shapes:shapes,annotations:ann,yaxis:{title:'speedup (×, log)',type:'log',gridcolor:'#2b3949',fixedrange:true}}),CFG);
+    Object.assign({},base,{shapes:shapes,annotations:ann,yaxis:{title:'speedup (×, log)',type:'log',dtick:1,gridcolor:'#2b3949',fixedrange:true}}),CFG);
   // build chart: only the transforms (Native pays no counted build); N as equal-spaced categories
   Plotly.react('bplot',['EAN','leveled'].map(a=>({x:DATA.ns.map(n=>n.toLocaleString()),y:run.build[a],type:'bar',name:a,marker:{color:C[a]}})),
     {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:64,r:18,t:8,b:46},
      barmode:'group',dragmode:false,legend:{orientation:'h',y:1.13},
      xaxis:{title:'N (nodes)',type:'category',gridcolor:'#2b3949',fixedrange:true},
-     yaxis:{title:'build time (ms, log)',type:'log',gridcolor:'#2b3949',fixedrange:true}},CFG);
+     yaxis:{title:'build time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true}},CFG);
 }
 function coverage(){
   let h='<table><tr><th>engine \\ density</th>'+DATA.densities.map(d=>'<th>D='+d+'</th>').join('')+'</tr>';
