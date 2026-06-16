@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>VLDB'27 — Constrained Path Traversal · Experiment Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root{--bg:#0f1419;--panel:#1a212b;--ink:#e6edf3;--mut:#8b97a7;--line:#2b3949;
+        --native:#ff6b6b;--ean:#4dabf7;--leveled:#51cf66;--accent:#ffd43b;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--line)}
+  h1{margin:0 0 6px;font-size:22px;font-weight:700}
+  .sub{color:var(--mut);max-width:900px}
+  .wrap{padding:22px 32px 60px;max-width:1180px;margin:0 auto}
+  .controls{display:flex;gap:10px;align-items:center;margin:18px 0 8px;flex-wrap:wrap}
+  .controls label{color:var(--mut)}
+  select{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+         border-radius:8px;padding:7px 12px;font-size:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+        padding:14px 14px 6px;margin:18px 0}
+  .card h2{margin:4px 6px 2px;font-size:16px}
+  .card p{margin:0 6px 10px;color:var(--mut);font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .plot{width:100%;height:420px}
+  .legend-note{display:flex;gap:18px;flex-wrap:wrap;color:var(--mut);font-size:13px;margin:6px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  footer{color:var(--mut);font-size:12.5px;padding:18px 32px 40px;border-top:1px solid var(--line);max-width:1180px;margin:0 auto}
+  code{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#cdd6e0}
+  a{color:var(--ean)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Constrained Path Traversal in GQL — Experiment Dashboard</h1>
+  <div class="sub">VLDB&nbsp;'27 · E1 (synthetic gMark, Neo4j, density&nbsp;=&nbsp;1). The query
+  <em>“is there a path of length k where edge amounts strictly increase”</em> (Q_mono) under three
+  representations: <b style="color:var(--native)">Native</b> (generate-then-filter),
+  <b style="color:var(--ean)">EAN</b> (edge→node), <b style="color:var(--leveled)">Leveled</b> (stages graph).
+  10 runs per query, trimmed mean; 60&nbsp;s timeout.</div>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <label for="nsel">Graph size N:</label>
+    <select id="nsel"></select>
+    <span class="legend-note" style="margin-left:auto">
+      <span><span class="dot" style="background:var(--native)"></span>Native</span>
+      <span><span class="dot" style="background:var(--ean)"></span>EAN</span>
+      <span><span class="dot" style="background:var(--leveled)"></span>Leveled</span>
+    </span>
+  </div>
+
+  <div class="card">
+    <h2>Query time vs path length (log scale)</h2>
+    <p>The headline: Native explodes with k and times out (line ends); the transforms stay <b>flat</b> across all k — even unbounded.</p>
+    <div id="qplot" class="plot"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Speedup vs Native (build + query)</h2>
+      <p>&gt;1 means the transform (incl. its build cost) beats Native. The dashed line is break-even (=1); the shaded band is where Native timed out, so the transforms win by default (∞).</p>
+      <div id="splot" class="plot"></div>
+    </div>
+    <div class="card">
+      <h2>Build time vs graph size</h2>
+      <p>One-time transform build (Native = just loading the input graph). Cheap until ~10⁵; real cost at 10⁶.</p>
+      <div id="bplot" class="plot"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Data: <a href="https://github.com/hadarrot/vldb27-experiments/tree/main/results">vldb27-experiments/results</a>.
+  Speedup = Latency<sub>native</sub> / (Build + Query). ∞ = Native timed out while the transform succeeded.
+  Build/query times are trimmed means of 10 cold runs. Generated from the committed CSVs.
+</footer>
+
+<script src="data.js"></script>
+<script>
+const C={native:'#ff6b6b',EAN:'#4dabf7',leveled:'#51cf66'};
+const KS=DATA.ks, xs=KS.map((_,i)=>i);
+const baseLayout={paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3'},
+  margin:{l:60,r:18,t:10,b:48},xaxis:{tickvals:xs,ticktext:KS,title:'path length k',gridcolor:'#2b3949'},
+  legend:{orientation:'h',y:1.12},hovermode:'x unified'};
+
+function draw(n){
+  n=String(n);
+  // query time (log y)
+  const q=DATA.query[n];
+  const qtraces=['native','EAN','leveled'].map(a=>({
+     x:xs,y:q[a],mode:'lines+markers',name:a,connectgaps:false,
+     line:{color:C[a],width:2.4},marker:{size:6}}));
+  Plotly.react('qplot',qtraces,Object.assign({},baseLayout,
+     {yaxis:{title:'query time (ms, log)',type:'log',gridcolor:'#2b3949'}}),{displayModeBar:false,responsive:true});
+
+  // speedup
+  const s=DATA.speedup[n];
+  const straces=['EAN','leveled'].map(a=>({
+     x:xs,y:s[a],mode:'lines+markers',name:a,connectgaps:false,
+     line:{color:C[a],width:2.4},marker:{size:6}}));
+  const shapes=[{type:'line',x0:-0.4,x1:KS.length-0.6,y0:1,y1:1,
+     line:{color:'#ffd43b',width:1.4,dash:'dash'}}];
+  // shade native-T.O. region
+  const tk=DATA.nat_to_k[n];
+  if(tk!==null){const i=KS.indexOf(tk);
+     shapes.push({type:'rect',x0:i-0.5,x1:KS.length-0.5,y0:0,y1:1,yref:'paper',
+        fillcolor:'rgba(255,107,107,0.10)',line:{width:0}});}
+  Plotly.react('splot',straces,Object.assign({},baseLayout,
+     {shapes:shapes,yaxis:{title:'speedup (×, log)',type:'log',gridcolor:'#2b3949'},
+      annotations: tk!==null?[{x:KS.indexOf(tk)+ (KS.length-1-KS.indexOf(tk))/2,
+        y:0.92,yref:'paper',text:'native T.O. → ∞',showarrow:false,font:{color:'#ff6b6b',size:11}}]:[]}),
+     {displayModeBar:false,responsive:true});
+}
+
+// build chart (static, all N)
+function drawBuild(){
+  const N=DATA.ns.map(String);
+  const traces=['native','EAN','leveled'].map(a=>({
+    x:N,y:DATA.build[a],type:'bar',name:a,marker:{color:C[a]}}));
+  Plotly.react('bplot',traces,{paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3'},
+    margin:{l:64,r:18,t:10,b:48},barmode:'group',legend:{orientation:'h',y:1.12},
+    xaxis:{title:'N (nodes)',gridcolor:'#2b3949'},
+    yaxis:{title:'build time (ms, log)',type:'log',gridcolor:'#2b3949'}},{displayModeBar:false,responsive:true});
+}
+
+const sel=document.getElementById('nsel');
+DATA.ns.forEach(n=>{const o=document.createElement('option');o.value=n;
+  o.textContent=n.toLocaleString();sel.appendChild(o);});
+sel.value=100000;                       // default: a size where native clearly breaks
+sel.onchange=()=>draw(sel.value);
+draw(sel.value); drawBuild();
+</script>
+</body>
+</html>
