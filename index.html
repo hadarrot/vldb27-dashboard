@@ -82,6 +82,10 @@
   .q b{color:var(--ean);font-family:'Space Grotesk'}
   code{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#cdd6e0}
   a{color:var(--ean)} ul{margin:6px 0 6px 18px;padding:0} li{margin:4px 0}
+  .qlabel{font-weight:600;margin:18px 0 6px;font-family:'Space Grotesk',sans-serif;font-size:14px}
+  pre.qry{background:#0b0f14;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#cdd6e0;
+    white-space:pre-wrap;line-height:1.55;overflow-x:auto}
 </style>
 </head>
 <body>
@@ -202,6 +206,26 @@
           <tr><th>Correctness</th><td>Validate vs ground-truth DP oracle + all 3 approaches must agree (representative configs)</td></tr>
           <tr><th>Skip logic</th><td>Once 2 consecutive bounded k both time out, skip remaining bounded k; unbounded always measured</td></tr>
         </table>
+
+        <h2 class="sec" style="margin-top:30px">Queries (Q_mono, path length k)</h2>
+        <p class="seclead">The exact Cypher run for each approach. For unbounded, the bounded quantifiers become Kleene <code>*</code>.</p>
+
+        <div class="qlabel" style="color:var(--native)">Native — query the input graph directly; check the constraint in WHERE (generate-then-filter)</div>
+        <pre class="qry">MATCH p = (s:Account)-[:TRANSFER*k..k]-&gt;(t:Account)
+WITH [r IN relationships(p) | r.amount] AS amts
+WHERE ALL(i IN range(0, size(amts)-2) WHERE amts[i] &lt; amts[i+1])
+RETURN count(*)</pre>
+
+        <div class="qlabel" style="color:var(--ean)">EAN — each edge is an Event node; the increasing constraint is checked inline via a hinge motif</div>
+        <pre class="qry">MATCH p = (s:EAN_Account)-[:OUT]-&gt;(first:EAN_Event)
+  ( (n:EAN_Event)-[:IN_]-&gt;(acc:EAN_Account)-[:OUT]-&gt;(m:EAN_Event)
+    WHERE n.amount &lt; m.amount ){k-1,k-1}
+RETURN count(p)</pre>
+
+        <div class="qlabel" style="color:var(--leveled)">Leveled — constraint baked into LIFT edges; the query is plain reachability</div>
+        <pre class="qry">MATCH (start:Leveled_Stage {level:-1})-[:LIFT*k..k]-&gt;(end:Leveled_Stage)
+RETURN count(*)</pre>
+        <p class="seclead" style="margin-top:10px">The Leveled graph is materialized once per constraint (the LIFT rule encodes the operator, e.g. <code>&lt;</code> for Q_mono) and reused for all k; EAN builds one graph reused for all k; Native uses the input graph directly.</p>
       </section>
 
       <!-- Reviewers -->
