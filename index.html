@@ -119,7 +119,7 @@
       <!-- E1 -->
       <section class="view show" id="view-e1">
         <div class="controls">
-          <span><label>Engine</label><select id="eng"></select></span>
+          <span><label>Engine</label><span class="toggle" id="engtoggle"></span></span>
           <span><label>Density</label><select id="den"></select></span>
           <span><label>Graph N</label><select id="nsel"></select></span>
           <span><label>Query stat</label>
@@ -266,7 +266,10 @@ function toMarker(show){
     annotations:[{xref:'paper',x:0.012,y:TO_LOG,text:'T.O. (60 s)',showarrow:false,xanchor:'left',yanchor:'bottom',font:{color:'#ff6b6b',size:11}}]}
    :{shapes:[],annotations:[]};
 }
-const key=()=>document.getElementById('eng').value+'|'+document.getElementById('den').value;
+let curEngine=DATA.engines[0];
+const ENG_META={neo4j:{name:'Neo4j',logo:'https://www.google.com/s2/favicons?domain=neo4j.com&sz=64'},
+                kuzu:{name:'Kùzu',logo:'https://www.google.com/s2/favicons?domain=kuzudb.com&sz=64'}};
+const key=()=>curEngine+'|'+document.getElementById('den').value;
 function setTodo(id){const e=document.getElementById(id);e.className='nodata';e.innerHTML='⏳ No data yet — TODO';e.style.height='420px';}
 
 const Nlabels=DATA.ns.map(n=>n.toLocaleString());
@@ -292,7 +295,7 @@ function drawReach(run){
 }
 function draw(){
   const run=DATA.runs[key()], n=document.getElementById('nsel').value;
-  document.getElementById('ctx').textContent='· '+document.getElementById('eng').value+' · density '+document.getElementById('den').value+' · N='+Number(n).toLocaleString()+' · '+(metric==='qmean'?'trimmed mean':'median');
+  document.getElementById('ctx').textContent='· '+ENG_META[curEngine].name+' · density '+document.getElementById('den').value+' · N='+Number(n).toLocaleString()+' · '+(metric==='qmean'?'trimmed mean':'median');
   ['qplot','splot','bplot','scplot','rplot'].forEach(id=>{const e=document.getElementById(id);e.className='plot';e.innerHTML='';});
   if(!run){['qplot','splot','bplot','scplot','rplot'].forEach(setTodo);return;}
   drawScaling(run); drawReach(run);
@@ -322,13 +325,22 @@ function coverage(){
   document.getElementById('cov').innerHTML=h;
 }
 
-const eng=document.getElementById('eng'),den=document.getElementById('den'),nsel=document.getElementById('nsel'),ksel=document.getElementById('ksel');
-DATA.engines.forEach(e=>eng.add(new Option(e,e)));
+const den=document.getElementById('den'),nsel=document.getElementById('nsel'),ksel=document.getElementById('ksel');
+// engine = segmented toggle with brand logos (native <select> can't hold images)
+const engBox=document.getElementById('engtoggle');
+DATA.engines.forEach((e,i)=>{
+  const m=ENG_META[e]||{name:e,logo:''};
+  const b=document.createElement('button');
+  if(i===0) b.classList.add('on');
+  b.innerHTML=(m.logo?'<img src="'+m.logo+'" onerror="this.style.display=\'none\'" style="width:15px;height:15px;border-radius:3px;vertical-align:-3px;margin-right:6px"> ':'')+m.name;
+  b.onclick=()=>{curEngine=e;document.querySelectorAll('#engtoggle button').forEach(x=>x.classList.toggle('on',x===b));draw();};
+  engBox.appendChild(b);
+});
 DATA.densities.forEach(d=>den.add(new Option('D='+d,d)));
 DATA.ns.forEach(n=>nsel.add(new Option(n.toLocaleString(),n)));
 KS.forEach(k=>ksel.add(new Option(k,k)));
 nsel.value=100000; ksel.value='64';
-[eng,den,nsel,ksel].forEach(s=>s.onchange=draw);
+[den,nsel,ksel].forEach(s=>s.onchange=draw);
 document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{metric=b.dataset.m;
   document.querySelectorAll('#metric button').forEach(x=>x.classList.toggle('on',x===b));draw();});
 document.getElementById('btc').innerHTML='⏳ TODO — '+DATA.bitcoin.datasets.join(' &nbsp;·&nbsp; ');
