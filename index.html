@@ -195,37 +195,104 @@
       <!-- Settings -->
       <section class="view" id="view-settings">
         <h2 class="sec">Settings</h2>
-        <p class="seclead">The fixed experimental setup.</p>
+        <p class="seclead">The experimental setup. The <b>Common</b> block is identical for both engines so the
+          comparison is apples-to-apples; the engine toggle below reveals the
+          <b style="color:var(--ean)">Neo4j</b> or <b style="color:var(--leveled)">Kùzu</b> specific choices and
+          caveats that follow from each engine's capabilities.</p>
+
+        <!-- ============ COMMON ============ -->
+        <h2 class="sec" style="margin-top:26px">Common to both engines</h2>
+        <p class="seclead">Held fixed across Neo4j and Kùzu.</p>
         <table>
           <tr><th>Approaches</th><td>Native (generate-then-filter), EAN (edge→node, query-independent), Leveled (stages graph, query-specific)</td></tr>
-          <tr><th>Engines</th><td>Neo4j + Kuzu</td></tr>
-          <tr><th>Query type</th><td>Q_mono = strictly increasing (&lt;)</td></tr>
-          <tr><th>Metric</th><td>Speedup = Latency_native / (Build + Query); build &amp; query also reported separately</td></tr>
+          <tr><th>Query type</th><td>Q_mono = strictly increasing edge amounts along the path (operator <code>&lt;</code>)</td></tr>
+          <tr><th>Graph source</th><td>gMark synthetic (single-type financial schema), <b>seed 42</b> — the edge sets are byte-identical across engines; amounts ~ U[1,1000]</td></tr>
+          <tr><th>Grid</th><td>nodes N ∈ {100, 1k, 10k, 100k, 1M}; density D ∈ {1, 5, 10} (E ≈ D·N); path length k ∈ {2, 4, 8, …, 1024, unbounded}</td></tr>
+          <tr><th>Metric</th><td>Speedup = Latency_native / (Build + Query); Native pays no counted build (queries the input graph directly); build &amp; query also reported separately</td></tr>
           <tr><th>Timeout</th><td>60s per build stage and per query</td></tr>
-          <tr><th>Runs</th><td>10 runs; drop fastest + slowest (1 each); trimmed mean; median also kept; cache cleared (cold)</td></tr>
-          <tr><th>Correctness</th><td>Validate vs ground-truth DP oracle + all 3 approaches must agree (representative configs)</td></tr>
-          <tr><th>Skip logic</th><td>Once 2 consecutive bounded k both time out, skip remaining bounded k; unbounded always measured</td></tr>
+          <tr><th>Runs</th><td>10 runs per query; drop fastest + slowest (1 each) → trimmed mean; median and all 10 raw run times retained</td></tr>
+          <tr><th>Correctness gate</th><td>Counts validated vs a ground-truth DP oracle <em>and</em> all 3 approaches must agree (representative configs) before any timing is trusted</td></tr>
+          <tr><th>Skip logic</th><td>Once 2 consecutive bounded k both time out, remaining bounded k are skipped; unbounded is always measured</td></tr>
         </table>
 
-        <h2 class="sec" style="margin-top:30px">Queries (Q_mono, path length k)</h2>
-        <p class="seclead">The exact Cypher run for each approach. For unbounded, the bounded quantifiers become Kleene <code>*</code>.</p>
+        <!-- ============ ENGINE-SPECIFIC (toggleable) ============ -->
+        <h2 class="sec" style="margin-top:30px">Engine-specific settings</h2>
+        <div class="controls" style="margin:8px 0 2px">
+          <span><label>Engine</label>
+            <span class="toggle" id="settoggle">
+              <button class="on" data-eng="neo4j"><img src="https://www.google.com/s2/favicons?domain=neo4j.com&amp;sz=64" onerror="this.style.display='none'" style="width:15px;height:15px;border-radius:3px;vertical-align:-3px;margin-right:6px">Neo4j</button>
+              <button data-eng="kuzu"><img src="https://www.google.com/s2/favicons?domain=kuzudb.com&amp;sz=64" onerror="this.style.display='none'" style="width:15px;height:15px;border-radius:3px;vertical-align:-3px;margin-right:6px">Kùzu</button>
+            </span>
+          </span>
+        </div>
 
-        <div class="qlabel" style="color:var(--native)">Native — query the input graph directly; check the constraint in WHERE (generate-then-filter)</div>
+        <!-- ============ NEO4J ============ -->
+        <div id="set-neo4j" class="engblock">
+        <h2 class="sec" style="margin-top:18px;border-left:3px solid var(--ean);padding-left:10px">Neo4j-specific</h2>
+        <p class="seclead">Neo4j 5.x — full Cypher (GQL-style quantified path patterns) over a client–server driver.</p>
+        <table>
+          <tr><th>Mode</th><td>Client–server; queries issued over the Bolt driver</td></tr>
+          <tr><th>Build / load</th><td>Batched <code>UNWIND … CREATE</code> write transactions (50k rows/tx)</td></tr>
+          <tr><th>Cold runs</th><td>Query-plan cache cleared before <em>every</em> run via <code>CALL db.clearQueryCaches()</code> → fully cold latency</td></tr>
+          <tr><th>Recursion</th><td>Arbitrary length via <code>*k..k</code>; unbounded via Kleene <code>*</code> (no depth cap)</td></tr>
+          <tr><th>EAN</th><td>Native <b>Quantified Path Patterns (QPP)</b> — the increasing constraint is checked inline on each iteration of the hinge motif</td></tr>
+        </table>
+
+        <div class="qlabel" style="color:var(--native)">Native — query the input graph directly; constraint in WHERE (generate-then-filter)</div>
         <pre class="qry">MATCH p = (s:Account)-[:TRANSFER*k..k]-&gt;(t:Account)
 WITH [r IN relationships(p) | r.amount] AS amts
 WHERE ALL(i IN range(0, size(amts)-2) WHERE amts[i] &lt; amts[i+1])
 RETURN count(*)</pre>
 
-        <div class="qlabel" style="color:var(--ean)">EAN — each edge is an Event node; the increasing constraint is checked inline via a hinge motif</div>
+        <div class="qlabel" style="color:var(--ean)">EAN — each edge is an Event node; constraint checked inline via a quantified hinge motif</div>
         <pre class="qry">MATCH p = (s:EAN_Account)-[:OUT]-&gt;(first:EAN_Event)
   ( (n:EAN_Event)-[:IN_]-&gt;(acc:EAN_Account)-[:OUT]-&gt;(m:EAN_Event)
     WHERE n.amount &lt; m.amount ){k-1,k-1}
 RETURN count(p)</pre>
 
-        <div class="qlabel" style="color:var(--leveled)">Leveled — constraint baked into LIFT edges; the query is plain reachability</div>
+        <div class="qlabel" style="color:var(--leveled)">Leveled — constraint baked into LIFT edges; query is plain reachability</div>
         <pre class="qry">MATCH (start:Leveled_Stage {level:-1})-[:LIFT*k..k]-&gt;(end:Leveled_Stage)
 RETURN count(*)</pre>
-        <p class="seclead" style="margin-top:10px">The Leveled graph is materialized once per constraint (the LIFT rule encodes the operator, e.g. <code>&lt;</code> for Q_mono) and reused for all k; EAN builds one graph reused for all k; Native uses the input graph directly.</p>
+        <p class="seclead" style="margin-top:10px">Unbounded: the bounded quantifiers become Kleene <code>*</code>.</p>
+        </div><!-- /set-neo4j -->
+
+        <!-- ============ KÙZU ============ -->
+        <div id="set-kuzu" class="engblock" style="display:none">
+        <h2 class="sec" style="margin-top:18px;border-left:3px solid var(--leveled);padding-left:10px">Kùzu-specific</h2>
+        <p class="seclead">Kùzu 0.11.3 — embedded (in-process) engine. Kùzu lacks QPP and caps recursion depth,
+          so EAN and the k&gt;30 queries are expressed differently; counts are still validated identical to
+          Neo4j and to the DP oracle.</p>
+        <table>
+          <tr><th>Mode</th><td><b>Embedded / in-process</b> — a local on-disk database directory, no server; runs fully in parallel with the Neo4j job</td></tr>
+          <tr><th>Build / load</th><td>Bulk <code>COPY</code> from CSV (schema DDL + COPY are timed as the build); a fresh DB directory per config</td></tr>
+          <tr><th>Caching caveat</th><td>No plan-cache-clear command exists; the <b>buffer pool stays warm</b> across runs → we measure <em>warm-buffer</em> latency, not fully cold. No artificial warmups are added; the first-run compile cost is the single slowest sample the trim drops. (Differs from Neo4j's cold runs above.)</td></tr>
+          <tr><th>Recursion depth cap</th><td>Variable-length paths are capped at <b>30 hops</b> (an open <code>*1..</code> also stops at depth 30). To reach k ∈ {32…1024} we <b>concatenate ≤30-hop segments</b>, verified exact vs the DP oracle.</td></tr>
+          <tr><th>Path semantics</th><td><code>TRAIL</code> (relationship-uniqueness) — matches Neo4j's default and avoids walk-explosion on cyclic graphs</td></tr>
+          <tr><th>EAN (no QPP)</th><td>The hinge motif is <b>explicitly unrolled</b> per k (constraint still inline). Kùzu's planner ceils at ~16 events, so EAN is only expressible for <b>k ≤ 8</b> on this grid; larger k surface as a transform failure (<code>T.O.</code>). <b>Unbounded EAN is inexpressible</b> on the canonical EAN graph → recorded as a transform failure.</td></tr>
+          <tr><th>Unbounded</th><td>Native/Leveled use <code>*1..</code>, which enumerates up to depth 30 — exact here, since the gMark graphs' longest strictly-increasing path is far below 30 (validation flags any shortfall vs the DP total)</td></tr>
+        </table>
+
+        <div class="qlabel" style="color:var(--native)">Native — generate-then-filter; TRAIL + concatenated ≤30-hop segments for k&gt;30</div>
+        <pre class="qry">MATCH p = (s:Account)-[r:TRANSFER* TRAIL k..k]-&gt;(t:Account)
+WITH properties(rels(p),'amount') AS a            -- spans every segment, in path order
+WHERE ALL(i IN range(0, size(a)-2) WHERE a[i+1] &lt; a[i+2])   -- Kùzu lists are 1-indexed
+RETURN count(*)
+-- k&gt;30: -[*TRAIL 30..30]-&gt;(m1)-[*TRAIL 30..30]-&gt;(m2)…   unbounded: * TRAIL 1.. (depth ≤ 30)</pre>
+
+        <div class="qlabel" style="color:var(--ean)">EAN — explicitly unrolled hinge (no QPP); inline consecutive-event predicates</div>
+        <pre class="qry">MATCH (a0:EAN_Account)-[:OUT_]-&gt;(e1:EAN_Event)-[:IN_]-&gt;(a1:EAN_Account)
+      -[:OUT_]-&gt;(e2:EAN_Event)-[:IN_]-&gt;(a2:EAN_Account)        -- … repeated k times
+WHERE e1.amount &lt; e2.amount AND e2.amount &lt; e3.amount AND …    -- inline, per consecutive pair
+RETURN count(*)
+-- planner ceiling ≈ 16 events ⇒ usable for k ≤ 8; unbounded unsupported</pre>
+
+        <div class="qlabel" style="color:var(--leveled)">Leveled — reachability on the LIFT DAG; <code>end</code> is reserved in Kùzu → use <code>en</code></div>
+        <pre class="qry">MATCH (st:Leveled_Stage)-[:LIFT*k..k]-&gt;(en:Leveled_Stage)
+WHERE st.level = -1
+RETURN count(*)
+-- k&gt;30: concatenate ≤30-hop LIFT segments;   unbounded: *1.. (depth ≤ 30)</pre>
+        <p class="seclead" style="margin-top:10px">As with Neo4j, the Leveled graph is materialized once per constraint and reused for all k; the EAN graph is built once and reused for all (expressible) k; Native uses the input graph directly.</p>
+        </div><!-- /set-kuzu -->
       </section>
 
       <!-- Reviewers -->
@@ -346,6 +413,13 @@ nsel.value=100000; ksel.value='64';
 [den,nsel,ksel].forEach(s=>s.onchange=draw);
 document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{metric=b.dataset.m;
   document.querySelectorAll('#metric button').forEach(x=>x.classList.toggle('on',x===b));draw();});
+// settings tab: toggle which engine's specific settings are shown (Common stays visible)
+document.querySelectorAll('#settoggle button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#settoggle button').forEach(x=>x.classList.toggle('on',x===b));
+  const e=b.dataset.eng;
+  document.getElementById('set-neo4j').style.display = e==='neo4j'?'':'none';
+  document.getElementById('set-kuzu').style.display  = e==='kuzu' ?'':'none';
+});
 document.getElementById('btc').innerHTML='⏳ TODO — '+DATA.bitcoin.datasets.join(' &nbsp;·&nbsp; ');
 coverage(); draw();
 
