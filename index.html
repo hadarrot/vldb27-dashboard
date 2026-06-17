@@ -205,14 +205,11 @@
         <p class="seclead">Held fixed across Neo4j and Kùzu.</p>
         <table>
           <tr><th>Approaches</th><td>Native (generate-then-filter), EAN (edge→node, query-independent), Leveled (stages graph, query-specific)</td></tr>
-          <tr><th>Query type</th><td>Q_mono = strictly increasing edge amounts along the path (operator <code>&lt;</code>)</td></tr>
-          <tr><th>Graph source</th><td>gMark synthetic (single-type financial schema), <b>seed 42</b> — the edge sets are byte-identical across engines; amounts ~ U[1,1000]</td></tr>
-          <tr><th>Grid</th><td>nodes N ∈ {100, 1k, 10k, 100k, 1M}; density D ∈ {1, 5, 10} (E ≈ D·N); path length k ∈ {2, 4, 8, …, 1024, unbounded}</td></tr>
-          <tr><th>Metric</th><td>Speedup = Latency_native / (Build + Query); Native pays no counted build (queries the input graph directly); build &amp; query also reported separately</td></tr>
-          <tr><th>Timeout</th><td>60s per build stage and per query</td></tr>
-          <tr><th>Runs</th><td>10 runs per query; drop fastest + slowest (1 each) → trimmed mean; median and all 10 raw run times retained</td></tr>
-          <tr><th>Correctness gate</th><td>Counts validated vs a ground-truth DP oracle <em>and</em> all 3 approaches must agree (representative configs) before any timing is trusted</td></tr>
-          <tr><th>Skip logic</th><td>Once 2 consecutive bounded k both time out, remaining bounded k are skipped; unbounded is always measured</td></tr>
+          <tr><th>Query · grid</th><td>Q_mono (strictly increasing, <code>&lt;</code>) over N ∈ {100…1M}, D ∈ {1,5,10} (E ≈ D·N), k ∈ {2,4,…,1024, unbounded}</td></tr>
+          <tr><th>Same graphs</th><td>gMark, <b>seed 42</b> → edge sets byte-identical across engines (apples-to-apples)</td></tr>
+          <tr><th>Metric</th><td>Speedup = Latency_native / (Build + Query) — Native pays <b>no counted build</b> (queries the input graph directly)</td></tr>
+          <tr><th>Measurement</th><td>60 s timeout; 10 runs → trimmed mean (drop fastest + slowest)</td></tr>
+          <tr><th>Correctness gate</th><td>Counts must match a DP oracle <em>and</em> all 3 approaches must agree before any timing is trusted</td></tr>
         </table>
 
         <!-- ============ ENGINE-SPECIFIC (toggleable) ============ -->
@@ -231,11 +228,9 @@
         <h2 class="sec" style="margin-top:18px;border-left:3px solid var(--ean);padding-left:10px">Neo4j-specific</h2>
         <p class="seclead">Neo4j 5.x — full Cypher (GQL-style quantified path patterns) over a client–server driver.</p>
         <table>
-          <tr><th>Mode</th><td>Client–server; queries issued over the Bolt driver</td></tr>
-          <tr><th>Build / load</th><td>Batched <code>UNWIND … CREATE</code> write transactions (50k rows/tx)</td></tr>
-          <tr><th>Cold runs</th><td>Query-plan cache cleared before <em>every</em> run via <code>CALL db.clearQueryCaches()</code> → fully cold latency</td></tr>
-          <tr><th>Recursion</th><td>Arbitrary length via <code>*k..k</code>; unbounded via Kleene <code>*</code> (no depth cap)</td></tr>
-          <tr><th>EAN</th><td>Native <b>Quantified Path Patterns (QPP)</b> — the increasing constraint is checked inline on each iteration of the hinge motif</td></tr>
+          <tr><th>Mode</th><td>Client–server over the Bolt driver</td></tr>
+          <tr><th>Cold runs</th><td>Plan cache cleared before <em>every</em> run (<code>CALL db.clearQueryCaches()</code>) → fully cold</td></tr>
+          <tr><th>No workarounds</th><td>Native <b>QPP</b> (inline EAN constraint) and uncapped <code>*k..k</code> / <code>*</code> — the queries below are the textbook GQL form</td></tr>
         </table>
 
         <div class="qlabel" style="color:var(--native)">Native — query the input graph directly; constraint in WHERE (generate-then-filter)</div>
@@ -263,13 +258,11 @@ RETURN count(*)</pre>
           so EAN and the k&gt;30 queries are expressed differently; counts are still validated identical to
           Neo4j and to the DP oracle.</p>
         <table>
-          <tr><th>Mode</th><td><b>Embedded / in-process</b> — a local on-disk database directory, no server; runs fully in parallel with the Neo4j job</td></tr>
-          <tr><th>Build / load</th><td>Bulk <code>COPY</code> from CSV (schema DDL + COPY are timed as the build); a fresh DB directory per config</td></tr>
-          <tr><th>Caching caveat</th><td>No plan-cache-clear command exists; the <b>buffer pool stays warm</b> across runs → we measure <em>warm-buffer</em> latency, not fully cold. No artificial warmups are added; the first-run compile cost is the single slowest sample the trim drops. (Differs from Neo4j's cold runs above.)</td></tr>
-          <tr><th>Recursion depth cap</th><td>Variable-length paths are capped at <b>30 hops</b> (an open <code>*1..</code> also stops at depth 30). To reach k ∈ {32…1024} we <b>concatenate ≤30-hop segments</b>, verified exact vs the DP oracle.</td></tr>
-          <tr><th>Path semantics</th><td><code>TRAIL</code> (relationship-uniqueness) — matches Neo4j's default and avoids walk-explosion on cyclic graphs</td></tr>
-          <tr><th>EAN (no QPP)</th><td>The hinge motif is <b>explicitly unrolled</b> per k (constraint still inline). Kùzu's planner ceils at ~16 events, so EAN is only expressible for <b>k ≤ 8</b> on this grid; larger k surface as a transform failure (<code>T.O.</code>). <b>Unbounded EAN is inexpressible</b> on the canonical EAN graph → recorded as a transform failure.</td></tr>
-          <tr><th>Unbounded</th><td>Native/Leveled use <code>*1..</code>, which enumerates up to depth 30 — exact here, since the gMark graphs' longest strictly-increasing path is far below 30 (validation flags any shortfall vs the DP total)</td></tr>
+          <tr><th>Mode</th><td><b>Embedded / in-process</b> (local DB dir, no server); bulk <code>COPY</code>-from-CSV load is timed as the build</td></tr>
+          <tr><th>Caching caveat</th><td>No plan-cache-clear exists — the <b>buffer pool stays warm</b>, so this is <em>warm-buffer</em> latency, not fully cold like Neo4j. No warmups added; the first-run compile cost is the slowest sample the trim drops.</td></tr>
+          <tr><th>30-hop recursion cap</th><td>Variable-length is capped at <b>30 hops</b> (open <code>*1..</code> stops at depth 30 too). k ∈ {32…1024} reached by <b>concatenating ≤30-hop segments</b> — verified exact vs the DP oracle.</td></tr>
+          <tr><th>TRAIL semantics</th><td>Relationship-uniqueness (matches Neo4j; avoids walk-explosion on cycles)</td></tr>
+          <tr><th>EAN has no QPP</th><td>Hinge is <b>explicitly unrolled</b> per k; Kùzu's planner ceils at ~16 events → EAN works only for <b>k ≤ 8</b>, and <b>unbounded EAN is inexpressible</b> (recorded as a transform <code>T.O.</code>).</td></tr>
         </table>
 
         <div class="qlabel" style="color:var(--native)">Native — generate-then-filter; TRAIL + concatenated ≤30-hop segments for k&gt;30</div>
