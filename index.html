@@ -182,8 +182,40 @@
       <!-- E2 -->
       <section class="view" id="view-e2">
         <h2 class="sec">E2 — Real-world data (Bitcoin)</h2>
-        <p class="seclead">Do the synthetic findings hold on real messy topologies? Same 3 approaches, Q_mono, k = 2…1024 + unbounded.</p>
-        <div class="card"><div id="btc" class="nodata"></div></div>
+        <p class="seclead">Do the synthetic findings hold on real messy topologies? Same 3 approaches, Q_mono, k = 2…1024 + unbounded. Edge <b>rating</b> (−10…+10) is the ordered amount.</p>
+        <div id="btc-todo" class="card" style="display:none"><div id="btc" class="nodata"></div></div>
+        <div id="btc-data" style="display:none">
+          <div class="controls">
+            <span><label>Dataset</label><span class="toggle" id="e2toggle"></span></span>
+            <span class="legend-note" style="margin-left:auto">
+              <span><span class="dot" style="background:var(--native)"></span>Native</span>
+              <span><span class="dot" style="background:var(--ean)"></span>EAN</span>
+              <span><span class="dot" style="background:var(--leveled)"></span>Leveled</span>
+            </span>
+          </div>
+          <div class="card">
+            <h3>Query time vs path length <span id="e2ctx" style="color:var(--mut);font-weight:400;font-size:13px"></span></h3>
+            <p>Native enumerates increasing-rating paths and climbs to the dashed T.O. (60 s) line; the transforms stay flat across all k, even unbounded. Only ~20 distinct ratings exist, so genuine increasing paths are short — yet Native still pays to discover that.</p>
+            <div id="e2-qplot" class="plot"></div>
+          </div>
+          <div class="grid">
+            <div class="card">
+              <h3>Speedup vs Native (build + query)</h3>
+              <p>&gt;1 = transform wins (incl. build). Yellow dashed = break-even (=1). A point at the <b>∞</b> tick = Native timed out & the transform succeeded; a point at the <b>T.O.</b> tick = the transform itself timed out / OOM'd. Hover for the exact outcome.</p>
+              <div id="e2-splot" class="plot"></div>
+            </div>
+            <div class="card">
+              <h3>Build time per approach</h3>
+              <p>One-time cost to materialize each transform on the real graph (EAN, Leveled). Native pays no counted build (it queries the input graph directly).</p>
+              <div id="e2-bplot" class="plot"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Speedup table (per cell)</h3>
+            <p>Exact per-cell outcome across both datasets. <b>Green</b> = transform wins (&gt;1), <b>red</b> = Native wins, <b style="color:#51cf66">∞</b> = Native timed out / transform succeeded, <b style="color:#ffd43b">yellow</b> = both failed, <b style="color:#c56cff">purple</b> = OOM. Hover any cell for the full sentence.</p>
+            <div id="e2-sptable" class="sptable"></div>
+          </div>
+        </div>
       </section>
 
       <!-- Coverage -->
@@ -470,7 +502,8 @@ function coverage(){
   let h='<table><tr><th>engine \\ density</th>'+DATA.densities.map(d=>'<th>D='+d+'</th>').join('')+'</tr>';
   DATA.engines.forEach(e=>{h+='<tr><th>'+e+'</th>';DATA.densities.forEach(d=>{const ok=DATA.available.includes(e+'|'+d);
     h+='<td><span class="pill '+(ok?'done':'todo')+'">'+(ok?'done':'TODO')+'</span></td>';});h+='</tr>';});
-  h+='</table><p style="margin-top:12px;color:var(--mut)">E2 real-world (Bitcoin Alpha + OTC): <span class="pill todo">TODO</span></p>';
+  const e2done=DATA.bitcoin&&DATA.bitcoin.status==='done';
+  h+='</table><p style="margin-top:12px;color:var(--mut)">E2 real-world (Bitcoin Alpha + OTC): <span class="pill '+(e2done?'done':'todo')+'">'+(e2done?'done':'TODO')+'</span></p>';
   document.getElementById('cov').innerHTML=h;
 }
 
@@ -499,7 +532,81 @@ document.querySelectorAll('#settoggle button').forEach(b=>b.onclick=()=>{
   document.getElementById('set-neo4j').style.display = e==='neo4j'?'':'none';
   document.getElementById('set-kuzu').style.display  = e==='kuzu' ?'':'none';
 });
-document.getElementById('btc').innerHTML='⏳ TODO — '+DATA.bitcoin.datasets.join(' &nbsp;·&nbsp; ');
+// ---------------- E2 (real-world Bitcoin) ----------------
+function e2Table(){
+  const BTC=DATA.bitcoin;
+  let h='<table class="sp"><tr><th class="rowh">dataset \\ k</th>'+KS.map(k=>'<th>'+k+'</th>').join('')+'</tr>';
+  BTC.order.forEach(ds=>{
+    const run=BTC.runs[ds], m=BTC.meta[ds];
+    ['EAN','leveled'].forEach(a=>{
+      h+='<tr class="grouphdr"><td colspan="'+(KS.length+1)+'">'+m.name+' — '+a+'</td></tr>';
+      const row=run.label[a]||[];
+      h+='<tr><th class="rowh">'+a+'</th>';
+      KS.forEach((k,i)=>{const l=row[i];if(!l){h+='<td></td>';return;}const c=cellColor(l);
+        h+='<td title="k='+k+': '+humanLabel(l)+'" style="background:'+c[0]+';color:'+c[1]+'">'+l+'</td>';});
+      h+='</tr>';
+    });
+  });
+  document.getElementById('e2-sptable').innerHTML=h+'</table>';
+}
+function e2Build(){
+  const BTC=DATA.bitcoin, names=BTC.order.map(ds=>BTC.meta[ds].name);
+  Plotly.react('e2-bplot',['EAN','leveled'].map(a=>({x:names,
+     y:BTC.order.map(ds=>BTC.runs[ds].build[a]),type:'bar',name:a,marker:{color:C[a]}})),
+    {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:64,r:18,t:8,b:46},
+     barmode:'group',dragmode:false,legend:{orientation:'h',y:1.13},
+     xaxis:Object.assign({type:'category',gridcolor:'#2b3949',fixedrange:true},AXL),
+     yaxis:Object.assign({title:'build time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)},CFG);
+}
+let e2cur=null;
+function e2Draw(){
+  const BTC=DATA.bitcoin, run=BTC.runs[e2cur], m=BTC.meta[e2cur];
+  document.getElementById('e2ctx').textContent='· '+m.name+' · N='+m.nodes.toLocaleString()+' · E='+m.edges.toLocaleString()+' · trimmed mean';
+  // query time vs k
+  const toQ=toMarker(run.nat_to_k!=null);
+  Plotly.react('e2-qplot',['native','EAN','leveled'].map(a=>{const ch=ceilHover(run.qmean[a]);
+    return {x:xs,y:ch.y,text:ch.t,hovertemplate:'%{fullData.name}: %{text}<extra></extra>',
+    mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}};}),
+    Object.assign({},base,{shapes:toQ.shapes,annotations:toQ.annotations,yaxis:Object.assign({title:'query time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
+  // speedup vs k (same encoding as E1: ∞ -> top tick, T.O./OOM -> floor tick)
+  const lab=run.label, allL=[].concat(lab.EAN||[],lab.leveled||[]);
+  const hasInf=allL.some(l=>l==='∞'), hasFail=allL.some(l=>l&&isNaN(parseFloat(l))&&l!=='∞');
+  const fin=allL.map(parseFloat).filter(v=>!isNaN(v)&&v>0);
+  const dMax=fin.length?Math.max(...fin):1, dMin=fin.length?Math.min(...fin):1;
+  const hiDec=Math.ceil(Math.log10(dMax)), loDec=Math.floor(Math.log10(dMin));
+  const INF_S=Math.pow(10,hiDec+1), FLR_S=Math.pow(10,loDec-1);
+  const tvals=[], ttext=[];
+  for(let d=loDec; d<=hiDec; d++){const v=Math.pow(10,d); tvals.push(v); ttext.push(v>=1?String(v):v.toString());}
+  if(hasInf){tvals.push(INF_S); ttext.push('∞');}
+  if(hasFail){tvals.push(FLR_S); ttext.push('T.O./OOM');}
+  const spY=ls=>(ls||[]).map(l=>{if(!l)return null;const v=parseFloat(l);return (!isNaN(v)&&l!=='∞')?v:(l==='∞'?INF_S:FLR_S);});
+  const spT=ls=>(ls||[]).map(l=>l?humanLabel(l):null);
+  const shapes=[{type:'line',x0:-0.4,x1:KS.length-0.6,y0:1,y1:1,line:{color:'#ffd43b',width:1.4,dash:'dash'}}];
+  Plotly.react('e2-splot',['EAN','leveled'].map(a=>({x:xs,y:spY(lab[a]),text:spT(lab[a]),
+    hovertemplate:'%{fullData.name}: %{text}<extra></extra>',mode:'lines+markers',name:a,connectgaps:false,
+    line:{color:C[a],width:2.4},marker:{size:7}})),
+    Object.assign({},base,{shapes:shapes,annotations:[],yaxis:Object.assign({title:'speedup (×, log)',type:'log',tickmode:'array',tickvals:tvals,ticktext:ttext,gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
+}
+function renderE2(){
+  const BTC=DATA.bitcoin;
+  if(!BTC||BTC.status!=='done'||!BTC.order||!BTC.order.length){
+    document.getElementById('btc-todo').style.display='';
+    document.getElementById('btc').innerHTML='⏳ TODO — '+DATA.bitcoin.datasets.join(' &nbsp;·&nbsp; ');
+    return;
+  }
+  document.getElementById('btc-data').style.display='';
+  const box=document.getElementById('e2toggle'); box.innerHTML='';
+  BTC.order.forEach((ds,i)=>{
+    const b=document.createElement('button');
+    if(i===0) b.classList.add('on');
+    b.textContent=BTC.meta[ds].name;
+    b.onclick=()=>{e2cur=ds;document.querySelectorAll('#e2toggle button').forEach(x=>x.classList.toggle('on',x===b));e2Draw();};
+    box.appendChild(b);
+  });
+  e2cur=BTC.order[0];
+  e2Table(); e2Build(); e2Draw();
+}
+renderE2();
 coverage(); draw();
 
 // sidebar view switching
@@ -510,6 +617,7 @@ document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{
   document.querySelectorAll('.view').forEach(s=>s.classList.toggle('show',s.id==='view-'+v));
   document.getElementById('topTitle').textContent=TITLES[v];
   if(v==='e1'){['qplot','splot','bplot','scplot','rplot'].forEach(id=>{try{Plotly.Plots.resize(id);}catch(e){}});}
+  if(v==='e2'){['e2-qplot','e2-splot','e2-bplot'].forEach(id=>{try{Plotly.Plots.resize(id);}catch(e){}});}
 });
 }
 var _s=document.createElement('script');_s.src='data.js?t='+Date.now();_s.onload=initDashboard;
