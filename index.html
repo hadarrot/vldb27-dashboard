@@ -375,7 +375,7 @@ function drawReach(run){
   const HT=a=>{const i=reachIdx(a);return i<0?'no result (times out before k=2)':'reaches k='+KS[i];};
   Plotly.react('rplot',['native','EAN','leveled'].map(a=>({x:Nlabels,
      y:DATA.ns.map(n=>H(run.qmean[String(n)][a])),text:DATA.ns.map(n=>HT(run.qmean[String(n)][a])),
-     hovertemplate:'%{fullData.name}: %{text}<extra></extra>',type:'bar',name:a,marker:{color:C[a]}})),
+     textposition:'none',hovertemplate:'%{fullData.name}: %{text}<extra></extra>',type:'bar',name:a,marker:{color:C[a]}})),
     {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:78,r:18,t:8,b:46},
      barmode:'group',dragmode:false,legend:{orientation:'h',y:1.13},
      xaxis:Object.assign({title:'N (nodes)',type:'category',gridcolor:'#2b3949',fixedrange:true},AXL),
