@@ -490,7 +490,7 @@ function draw(){
   Plotly.react('splot',['EAN','leveled'].map(a=>({x:xs,y:spY(lab[a]),text:spT(lab[a]),
     hovertemplate:'%{fullData.name}: %{text}<extra></extra>',mode:'lines+markers',name:a,connectgaps:false,
     line:{color:C[a],width:2.4},marker:{size:7}})),
-    Object.assign({},base,{shapes:shapes,annotations:ann,yaxis:Object.assign({title:'speedup (×, log)',type:'log',tickmode:'array',tickvals:tvals,ticktext:ttext,gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
+    Object.assign({},base,{margin:{l:92,r:18,t:8,b:46},shapes:shapes,annotations:ann,yaxis:Object.assign({title:'speedup (×, log)',type:'log',tickmode:'array',tickvals:tvals,ticktext:ttext,gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
   // build chart: only the transforms (Native pays no counted build); N as equal-spaced categories
   Plotly.react('bplot',['EAN','leveled'].map(a=>({x:DATA.ns.map(n=>n.toLocaleString()),y:run.build[a],type:'bar',name:a,marker:{color:C[a]}})),
     {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:64,r:18,t:8,b:46},
