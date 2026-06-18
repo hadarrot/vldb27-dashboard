@@ -603,8 +603,9 @@ function e2Draw(){
   Plotly.react('e2-splot',['EAN','leveled'].map(a=>({x:xs,y:spY(lab[a]),text:spT(lab[a]),
     hovertemplate:'%{fullData.name}: %{text}<extra></extra>',mode:'lines+markers',name:a,connectgaps:false,
     line:{color:C[a],width:2.4},marker:{size:7}})),
-    Object.assign({},base,{shapes:shapes,annotations:[],yaxis:Object.assign({title:'speedup (×, log)',type:'log',tickmode:'array',tickvals:tvals,ticktext:ttext,gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
+    Object.assign({},base,{margin:{l:92,r:18,t:8,b:46},shapes:shapes,annotations:[],yaxis:Object.assign({title:'speedup (×, log)',type:'log',tickmode:'array',tickvals:tvals,ticktext:ttext,gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
 }
+let e2rendered=false;
 function renderE2(){
   const BTC=DATA.bitcoin;
   if(!BTC||BTC.status!=='done'||!BTC.order||!BTC.order.length){
@@ -624,7 +625,6 @@ function renderE2(){
   e2cur=BTC.order[0];
   e2Table(); e2Build(); e2Reach(); e2Draw();
 }
-renderE2();
 coverage(); draw();
 
 // sidebar view switching
@@ -635,7 +635,12 @@ document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{
   document.querySelectorAll('.view').forEach(s=>s.classList.toggle('show',s.id==='view-'+v));
   document.getElementById('topTitle').textContent=TITLES[v];
   if(v==='e1'){['qplot','splot','bplot','scplot','rplot'].forEach(id=>{try{Plotly.Plots.resize(id);}catch(e){}});}
-  if(v==='e2'){['e2-qplot','e2-splot','e2-bplot','e2-rplot'].forEach(id=>{try{Plotly.Plots.resize(id);}catch(e){}});}
+  // E2 plots must first render while their container is VISIBLE, or Plotly sizes them
+  // to a fallback width and they overflow the card. Render lazily on first open, then resize.
+  if(v==='e2'){
+    if(!e2rendered){renderE2(); e2rendered=true;}
+    else ['e2-qplot','e2-splot','e2-bplot','e2-rplot'].forEach(id=>{try{Plotly.Plots.resize(id);}catch(e){}});
+  }
 });
 }
 var _s=document.createElement('script');_s.src='data.js?t='+Date.now();_s.onload=initDashboard;
