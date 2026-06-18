@@ -167,7 +167,7 @@
           </div>
           <div class="card">
             <h3>Max reachable path length before timeout</h3>
-            <p>How far each approach gets before a query times out. Native's reach shrinks as the graph grows; the transforms reach unbounded throughout.</p>
+            <p>How far each approach gets before timing out (bar top = furthest path length k reached; no bar = times out before even k=2). Native's reach shrinks fastest as the graph grows; the transforms reach much further — unbounded at low density.</p>
             <div id="rplot" class="plot"></div>
           </div>
         </div>
@@ -369,12 +369,17 @@ function drawScaling(run){
      yaxis:Object.assign({title:'query time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)},CFG);
 }
 function drawReach(run){
+  // bar height = (index of furthest k reached) + 1, so all bars share a baseline of 0:
+  //   0 -> no bar (times out before even k=2)   1 -> reaches k=2   ...   11 -> unbounded
+  const H=a=>reachIdx(a)+1;
+  const HT=a=>{const i=reachIdx(a);return i<0?'no result (times out before k=2)':'reaches k='+KS[i];};
   Plotly.react('rplot',['native','EAN','leveled'].map(a=>({x:Nlabels,
-     y:DATA.ns.map(n=>reachIdx(run.qmean[String(n)][a])),type:'bar',name:a,marker:{color:C[a]}})),
+     y:DATA.ns.map(n=>H(run.qmean[String(n)][a])),text:DATA.ns.map(n=>HT(run.qmean[String(n)][a])),
+     hovertemplate:'%{fullData.name}: %{text}<extra></extra>',type:'bar',name:a,marker:{color:C[a]}})),
     {paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},margin:{l:78,r:18,t:8,b:46},
      barmode:'group',dragmode:false,legend:{orientation:'h',y:1.13},
      xaxis:Object.assign({title:'N (nodes)',type:'category',gridcolor:'#2b3949',fixedrange:true},AXL),
-     yaxis:Object.assign({title:'max reachable k',tickvals:xs,ticktext:KS,range:[-0.5,KS.length-0.5],gridcolor:'#2b3949',fixedrange:true},AXL)},CFG);
+     yaxis:Object.assign({title:'max reachable k',tickvals:xs.map(i=>i+1),ticktext:KS,range:[0,KS.length+0.5],gridcolor:'#2b3949',fixedrange:true},AXL)},CFG);
 }
 // Label grammar: number | ∞ | bTO/bOOM (build/transformation failed) | qTO/qOOM (query failed)
 //                | X+Y (both failed; Y = native TO/OOM)
