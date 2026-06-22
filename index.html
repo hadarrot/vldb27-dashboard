@@ -136,6 +136,12 @@
               <button class="tip" data-m="qmedian" data-tip="Median: the middle value of the 10 sorted run times — naturally ignores outliers.">median</button>
             </span>
           </span>
+          <span><label>Y axis</label>
+            <span class="toggle" id="qmode">
+              <button class="tip on" data-q="q" data-tip="Query time only — the per-query latency, excluding the one-time build/transformation cost.">query only</button>
+              <button class="tip" data-q="qb" data-tip="Query + build — adds each transform's one-time build cost to its query time, so the curve reflects total cost incl. materialization. Native pays no build, so its line is unchanged.">query + build</button>
+            </span>
+          </span>
           <span class="legend-note" style="margin-left:auto">
             <span><span class="dot" style="background:var(--native)"></span>Native</span>
             <span><span class="dot" style="background:var(--ean)"></span>EAN</span>
@@ -144,7 +150,7 @@
         </div>
         <div class="card">
           <h3>Query time vs path length <span id="ctx" style="color:var(--mut);font-weight:400;font-size:13px"></span></h3>
-          <p>Native explodes with k and times out — its line climbs to the dashed T.O. (60 s) line; the transforms stay flat across all k, even unbounded.</p>
+          <p>Native explodes with k and times out — its line climbs to the dashed T.O. (60 s) line; the transforms stay flat across all k, even unbounded. Use the <b>Y axis</b> toggle to add each transform's one-time build cost (<i>query + build</i>); Native pays no build, so its line is unchanged.</p>
           <div id="qplot" class="plot"></div>
         </div>
         <div class="grid">
@@ -187,6 +193,12 @@
         <div id="btc-data" style="display:none">
           <div class="controls">
             <span><label>Dataset</label><span class="toggle" id="e2toggle"></span></span>
+            <span><label>Y axis</label>
+              <span class="toggle" id="e2qmode">
+                <button class="tip on" data-q="q" data-tip="Query time only — the per-query latency, excluding the one-time build/transformation cost.">query only</button>
+                <button class="tip" data-q="qb" data-tip="Query + build — adds each transform's one-time build cost to its query time. Native pays no build, so its line is unchanged.">query + build</button>
+              </span>
+            </span>
             <span class="legend-note" style="margin-left:auto">
               <span><span class="dot" style="background:var(--native)"></span>Native</span>
               <span><span class="dot" style="background:var(--ean)"></span>EAN</span>
@@ -195,7 +207,7 @@
           </div>
           <div class="card">
             <h3>Query time vs path length <span id="e2ctx" style="color:var(--mut);font-weight:400;font-size:13px"></span></h3>
-            <p>Native enumerates increasing-rating paths and climbs to the dashed T.O. (60 s) line; the transforms stay flat across all k, even unbounded. Only ~20 distinct ratings exist, so genuine increasing paths are short — yet Native still pays to discover that.</p>
+            <p>Native enumerates increasing-rating paths and climbs to the dashed T.O. (60 s) line; the transforms stay flat across all k, even unbounded. Only ~20 distinct ratings exist, so genuine increasing paths are short — yet Native still pays to discover that. Use the <b>Y axis</b> toggle to add each transform's one-time build cost (<i>query + build</i>); Native pays no build, so its line is unchanged.</p>
             <div id="e2-qplot" class="plot"></div>
           </div>
           <div class="grid">
@@ -367,6 +379,10 @@ function initDashboard(){
 const C={native:'#ff6b6b',EAN:'#4dabf7',leveled:'#51cf66'};
 const KS=DATA.ks, xs=KS.map((_,i)=>i);
 let metric='qmean';
+let qmode='q';   // 'q' = query time only | 'qb' = query + one-time build cost (Native pays no build)
+// add the transform's one-time build to each finished query point; timeouts (null) stay null.
+// bv: build cost in ms (0 for Native). returns a new per-k array.
+function addBuild(arr,bv){return arr.map(v=>v==null?null:v+bv);}
 const CFG={displayModeBar:false,responsive:true,scrollZoom:false,doubleClick:false};
 const base={paper_bgcolor:'#1a212b',plot_bgcolor:'#1a212b',font:{color:'#e6edf3',family:'Inter'},
   margin:{l:62,r:18,t:8,b:46},legend:{orientation:'h',y:1.13},hovermode:'x unified',dragmode:false,
@@ -460,16 +476,19 @@ function drawTable(run){
 }
 function draw(){
   const run=DATA.runs[key()], n=document.getElementById('nsel').value;
-  document.getElementById('ctx').textContent='· '+ENG_META[curEngine].name+' · density '+document.getElementById('den').value+' · N='+Number(n).toLocaleString()+' · '+(metric==='qmean'?'trimmed mean':'median');
+  document.getElementById('ctx').textContent='· '+ENG_META[curEngine].name+' · density '+document.getElementById('den').value+' · N='+Number(n).toLocaleString()+' · '+(metric==='qmean'?'trimmed mean':'median')+' · '+(qmode==='qb'?'query + build':'query only');
   ['qplot','splot','bplot','scplot','rplot'].forEach(id=>{const e=document.getElementById(id);e.className='plot';e.innerHTML='';});
   if(!run){['qplot','splot','bplot','scplot','rplot'].forEach(setTodo);document.getElementById('sptable').innerHTML='';return;}
   drawScaling(run); drawReach(run); drawTable(run);
   const q=run[metric][n];
+  const ni=DATA.ns.indexOf(Number(n));   // index of selected N, to look up its build cost
   const toQ=toMarker(run.nat_to_k[n]!=null);
-  Plotly.react('qplot',['native','EAN','leveled'].map(a=>{const ch=ceilHover(q[a]);
+  Plotly.react('qplot',['native','EAN','leveled'].map(a=>{
+    const bv=(qmode==='qb'&&a!=='native')?(run.build[a][ni]||0):0;
+    const ch=ceilHover(addBuild(q[a],bv));
     return {x:xs,y:ch.y,text:ch.t,hovertemplate:'%{fullData.name}: %{text}<extra></extra>',
     mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}};}),
-    Object.assign({},base,{shapes:toQ.shapes,annotations:toQ.annotations,yaxis:Object.assign({title:'query time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
+    Object.assign({},base,{shapes:toQ.shapes,annotations:toQ.annotations,yaxis:Object.assign({title:(qmode==='qb'?'query + build time (ms, log)':'query time (ms, log)'),type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
   // Speedup encodes the per-cell OUTCOME by vertical position (since ∞ and T.O. aren't plottable
   // numbers): finite speedup -> its value; ∞ (Native T.O., transform won) -> top INF line;
   // any transform timeout/OOM -> bottom T.O. line. So a transform that dies is visibly pinned low.
@@ -530,6 +549,11 @@ nsel.value=100000; ksel.value='64';
 [den,nsel,ksel].forEach(s=>s.onchange=draw);
 document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{metric=b.dataset.m;
   document.querySelectorAll('#metric button').forEach(x=>x.classList.toggle('on',x===b));draw();});
+// Y-axis toggle (query only / query + build) — shared state, kept in sync across E1 & E2 toggles
+function setQmode(m){qmode=m;
+  document.querySelectorAll('#qmode button,#e2qmode button').forEach(x=>x.classList.toggle('on',x.dataset.q===m));
+  draw(); if(e2cur) e2Draw();}
+document.querySelectorAll('#qmode button,#e2qmode button').forEach(b=>b.onclick=()=>setQmode(b.dataset.q));
 // settings tab: toggle which engine's specific settings are shown (Common stays visible)
 document.querySelectorAll('#settoggle button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#settoggle button').forEach(x=>x.classList.toggle('on',x===b));
@@ -579,13 +603,15 @@ function e2Reach(){
 let e2cur=null;
 function e2Draw(){
   const BTC=DATA.bitcoin, run=BTC.runs[e2cur], m=BTC.meta[e2cur];
-  document.getElementById('e2ctx').textContent='· '+m.name+' · N='+m.nodes.toLocaleString()+' · E='+m.edges.toLocaleString()+' · trimmed mean';
+  document.getElementById('e2ctx').textContent='· '+m.name+' · N='+m.nodes.toLocaleString()+' · E='+m.edges.toLocaleString()+' · trimmed mean · '+(qmode==='qb'?'query + build':'query only');
   // query time vs k
   const toQ=toMarker(run.nat_to_k!=null);
-  Plotly.react('e2-qplot',['native','EAN','leveled'].map(a=>{const ch=ceilHover(run.qmean[a]);
+  Plotly.react('e2-qplot',['native','EAN','leveled'].map(a=>{
+    const bv=(qmode==='qb'&&a!=='native')?(run.build[a]||0):0;
+    const ch=ceilHover(addBuild(run.qmean[a],bv));
     return {x:xs,y:ch.y,text:ch.t,hovertemplate:'%{fullData.name}: %{text}<extra></extra>',
     mode:'lines+markers',name:a,connectgaps:false,line:{color:C[a],width:2.4},marker:{size:6}};}),
-    Object.assign({},base,{shapes:toQ.shapes,annotations:toQ.annotations,yaxis:Object.assign({title:'query time (ms, log)',type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
+    Object.assign({},base,{shapes:toQ.shapes,annotations:toQ.annotations,yaxis:Object.assign({title:(qmode==='qb'?'query + build time (ms, log)':'query time (ms, log)'),type:'log',dtick:1,tickformat:'~s',gridcolor:'#2b3949',fixedrange:true},AXL)}),CFG);
   // speedup vs k (same encoding as E1: ∞ -> top tick, T.O./OOM -> floor tick)
   const lab=run.label, allL=[].concat(lab.EAN||[],lab.leveled||[]);
   const hasInf=allL.some(l=>l==='∞'), hasFail=allL.some(l=>l&&isNaN(parseFloat(l))&&l!=='∞');
